@@ -689,48 +689,178 @@ def extract_needed_contributor_data(contributor, tool_source, tool_version, data
     return contributor
 
 def extract_needed_gitlab_contributor_data(contributor, tool_source, tool_version,  data_source):
+    """
+    Extract and map GitLab contributor data to the correct database columns.
+    
+    ⚠️  CRITICAL: This function populates GitLab-specific columns (gl_*) ONLY.
+    All GitHub columns (gh_*) are explicitly set to None to prevent cross-contamination.
+    
+    Background (Issue #3469):
+    -------------------------
+    Prior to this fix, GitLab contributor data was incorrectly stored in GitHub
+    columns (gh_user_id, gh_login, gh_url, etc.), causing:
+    - Violation of unique constraint GH-UNIQUE-C on gh_login
+    - Inability to distinguish GitLab users from GitHub users
+    - Data integrity issues in contributor queries
+    
+    Column Mapping Strategy:
+    ------------------------
+    GitLab API Field → Database Column:
+    - contributor['id'] → gl_id (NOT gh_user_id)
+    - contributor['username'] → gl_username (NOT gh_login) and cntrb_login
+    - contributor['web_url'] → gl_web_url (NOT gh_url)
+    - contributor['avatar_url'] → gl_avatar_url (NOT gh_avatar_url)
+    - contributor['state'] → gl_state (GitLab-specific, e.g., 'active', 'blocked')
+    - contributor['name'] → gl_full_name and cntrb_full_name
+    
+    Why cntrb_login is populated:
+    ------------------------------
+    cntrb_login serves as a universal login field across all forge platforms.
+    For GitLab users, it mirrors gl_username. This allows generic queries like:
+        SELECT * FROM contributors WHERE cntrb_login = 'username'
+    while maintaining forge-specific data in separate columns.
+    
+    Args:
+        contributor (dict): GitLab user data from API response. Expected structure:
+            {
+                'id': int,                  # Required: GitLab user ID
+                'username': str,            # Required: GitLab username
+                'web_url': str,             # Required: GitLab profile URL
+                'avatar_url': str,          # Optional: Avatar image URL
+                'name': str,                # Optional: Full display name
+                'state': str,               # Optional: Account state ('active', 'blocked', etc.)
+                'email': str,               # Optional: Public email
+                'location': str,            # Optional: User location
+                'company': str,             # Optional: Company/organization
+                'created_at': str           # Optional: Account creation timestamp
+            }
+        tool_source (str): Source of the data collection (e.g., 'GitLab API Worker')
+        tool_version (str): Version of the tool collecting the data
+        data_source (str): Data source identifier (e.g., 'GitLab API')
+        
+    Returns:
+        dict: Dictionary with contributor data mapped to correct database columns.
+            Contains all fields needed for augur_data.contributors table:
+            - Common fields: cntrb_id, cntrb_login, cntrb_full_name, etc.
+            - GitLab fields: gl_id, gl_username, gl_web_url, gl_avatar_url, gl_state, gl_full_name
+            - GitHub fields: All set to None
+            - Metadata fields: tool_source, tool_version, data_source
+        None: If contributor is None/empty
+        
+    Example:
+        >>> gitlab_user = {
+        ...     'id': 5481034,
+        ...     'username': 'computationalmystic',
+        ...     'name': 'Sean Goggins',
+        ...     'web_url': 'https://gitlab.com/computationalmystic',
+        ...     'avatar_url': 'https://secure.gravatar.com/avatar/...',
+        ...     'state': 'active'
+        ... }
+        >>> result = extract_needed_gitlab_contributor_data(
+        ...     gitlab_user, 'GitLab Worker', '1.0', 'GitLab API'
+        ... )
+        >>> print(result['gl_username'])  # 'computationalmystic'
+        >>> print(result['cntrb_login'])  # 'computationalmystic'
+        >>> print(result['gh_login'])     # None (correct!)
+    
+    Related:
+        - extract_needed_contributor_data(): Similar function for GitHub data
+        - augur.tasks.util.contributor_utils.validate_contributor_data(): Validation helper
+        - Issue #3469: https://github.com/chaoss/augur/issues/3469
+    
+    Note:
+        Use augur.tasks.util.contributor_utils.validate_contributor_data() after
+        calling this function to ensure proper column mapping before database insertion.
+    """
 
     if not contributor:
         return None
 
+    # Generate GitLab-specific UUID using GitlabUUID class
+    # This UUID is different from GitHub UUIDs to ensure platform separation
     cntrb_id = GitlabUUID()   
     cntrb_id["user"] = contributor["id"]
 
-    contributor = {
-            "cntrb_id": cntrb_id.to_UUID(),
-            "cntrb_login": contributor['username'],
-            "cntrb_created_at": contributor['created_at'] if 'created_at' in contributor else None,
-            "cntrb_email": contributor['email'] if 'email' in contributor else None,
-            "cntrb_company": contributor['company'] if 'company' in contributor else None,
-            "cntrb_location": contributor['location'] if 'location' in contributor else None,
-            # "cntrb_type": , dont have a use for this as of now ... let it default to null
-            "cntrb_canonical": contributor['email'] if 'email' in contributor else None,
-            "gh_user_id": contributor['id'],
-            "gh_login": str(contributor['username']),  ## cast as string by SPG on 11/28/2021 due to `nan` user
-            "gh_url": contributor['web_url'],
-            "gh_html_url": None,
-            "gh_node_id": None,
-            "gh_avatar_url": contributor['avatar_url'],
-            "gh_gravatar_id": None,
-            "gh_followers_url": None,
-            "gh_following_url": None,
-            "gh_gists_url": None,
-            "gh_starred_url": None,
-            "gh_subscriptions_url": None,
-            "gh_organizations_url": None,
-            "gh_repos_url": None,
-            "gh_events_url": None,
-            "gh_received_events_url": None,
-            "gh_type": None,
-            "gh_site_admin": None,
-            "cntrb_last_used" : None,
-            "cntrb_full_name" : None,
-            "tool_source": tool_source,
-            "tool_version": tool_version,
-            "data_source": data_source
-        }
+    # Map GitLab API fields to database columns
+    # ==========================================
+    # CRITICAL: Using GitLab-specific columns (gl_*) to avoid contaminating GitHub columns (gh_*)
+    # This fixes issue #3469 where GitLab data was incorrectly stored in gh_* columns
+    contributor_dict = {
+        # -------------------------------------------------------------------------
+        # COMMON CONTRIBUTOR FIELDS (forge-agnostic)
+        # -------------------------------------------------------------------------
+        # These fields are populated regardless of forge type and provide
+        # a common interface for querying contributors across platforms
+        
+        "cntrb_id": cntrb_id.to_UUID(),
+        
+        # cntrb_login: Universal login field - mirrors gl_username for GitLab users
+        # Purpose: Allows queries like "WHERE cntrb_login = 'username'" to work
+        # across all forges without needing to know which platform the user is from
+        "cntrb_login": contributor['username'],  
+        
+        "cntrb_created_at": contributor.get('created_at'),
+        "cntrb_email": contributor.get('email'),
+        "cntrb_company": contributor.get('company'),
+        "cntrb_location": contributor.get('location'),
+        "cntrb_canonical": contributor.get('email'),
+        "cntrb_last_used": None,
+        "cntrb_full_name": contributor.get('name'),  # GitLab 'name' field
+        
+        # -------------------------------------------------------------------------
+        # GITLAB-SPECIFIC COLUMNS (gl_*) - CORRECT MAPPING
+        # -------------------------------------------------------------------------
+        # These columns store GitLab-specific data. The GL-UNIQUE-B and GL-UNIQUE-C
+        # constraints ensure gl_id and gl_username are unique for GitLab users.
+        
+        "gl_id": contributor['id'],                        # GitLab user ID (unique constraint: GL-UNIQUE-B)
+        "gl_username": str(contributor['username']),       # GitLab username (unique constraint: GL-UNIQUE-C)
+        "gl_web_url": contributor.get('web_url'),          # GitLab profile URL (e.g., https://gitlab.com/user)
+        "gl_avatar_url": contributor.get('avatar_url'),    # GitLab avatar URL
+        "gl_state": contributor.get('state'),              # GitLab account state ('active', 'blocked', 'deactivated')
+        "gl_full_name": contributor.get('name'),           # GitLab full display name
+        
+        # -------------------------------------------------------------------------
+        # GITHUB-SPECIFIC COLUMNS (gh_*) - EXPLICITLY SET TO NONE
+        # -------------------------------------------------------------------------
+        # For GitLab users, ALL GitHub columns must be None to prevent:
+        # 1. Cross-contamination of data (issue #3469)
+        # 2. Violation of unique constraint GH-UNIQUE-C on gh_login
+        # 3. Incorrect platform identification in queries
+        #
+        # These explicit None assignments ensure that even if the function is
+        # called with contaminated data, GitHub columns will be cleared.
+        
+        "gh_user_id": None,
+        "gh_login": None,
+        "gh_url": None,
+        "gh_html_url": None,
+        "gh_node_id": None,
+        "gh_avatar_url": None,
+        "gh_gravatar_id": None,
+        "gh_followers_url": None,
+        "gh_following_url": None,
+        "gh_gists_url": None,
+        "gh_starred_url": None,
+        "gh_subscriptions_url": None,
+        "gh_organizations_url": None,
+        "gh_repos_url": None,
+        "gh_events_url": None,
+        "gh_received_events_url": None,
+        "gh_type": None,
+        "gh_site_admin": None,
+        
+        # -------------------------------------------------------------------------
+        # METADATA FIELDS
+        # -------------------------------------------------------------------------
+        # Track the source and version of data collection for debugging and auditing
+        
+        "tool_source": tool_source,
+        "tool_version": tool_version,
+        "data_source": data_source
+    }
 
-    return contributor
+    return contributor_dict
 
 
 def extract_needed_clone_history_data(clone_history_data:List[dict], repo_id:int):

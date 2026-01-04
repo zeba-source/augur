@@ -1,0 +1,57 @@
+{
+    "description": "Mock GitLab API user response - based on GitLab REST API v4",
+    "source": "https://gitlab.com/api/v4/users/{id}",
+    "data": {
+        "id": 5481034,
+        "username": "computationalmystic",
+        "name": "Sean Goggins",
+        "state": "active",
+        "avatar_url": "https://secure.gravatar.com/avatar/a1b2c3d4e5f6g7h8i9j0?s=80&d=identicon",
+        "web_url": "https://gitlab.com/computationalmystic",
+        "created_at": "2019-08-15T10:23:45.123Z",
+        "bio": "Open source advocate and metrics enthusiast",
+        "location": "Columbia, MO",
+        "public_email": "computationalmystic@example.com",
+        "skype": "",
+        "linkedin": "seangoggins",
+        "twitter": "seangoggins",
+        "website_url": "https://www.seangoggins.net",
+        "organization": "CHAOSS",
+        "job_title": "Professor",
+        "pronouns": "he/him",
+        "bot": false,
+        "work_information": null,
+        "followers": 56,
+        "following": 23,
+        "local_time": "12:30 PM",
+        "last_sign_in_at": "2025-12-27T18:45:32.789Z",
+        "confirmed_at": "2019-08-15T11:00:00.000Z",
+        "last_activity_on": "2025-12-27",
+        "email": "computationalmystic@example.com",
+        "theme_id": 1,
+        "color_scheme_id": 1,
+        "projects_limit": 100000,
+        "current_sign_in_at": "2025-12-28T08:15:22.456Z",
+        "identities": [
+            {
+                "provider": "google_oauth2",
+                "extern_uid": "1234567890"
+            }
+        ],
+        "can_create_group": true,
+        "can_create_project": true,
+        "two_factor_enabled": true,
+        "external": false,
+        "private_profile": false,
+        "commit_email": "computationalmystic@example.com",
+        "shared_runners_minutes_limit": null,
+        "extra_shared_runners_minutes_limit": null
+    },
+    "notes": [
+        "This represents a typical GitLab user API response",
+        "web_url uses gitlab.com domain structure",
+        "state can be: active, blocked, banned, ldap_blocked",
+        "Some fields may be null if user hasn't set them",
+        "GitLab provides more metadata than GitHub (sign-in times, limits, etc.)"
+    ]
+}

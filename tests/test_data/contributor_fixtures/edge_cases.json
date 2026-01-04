@@ -1,0 +1,376 @@
+{
+    "description": "Edge cases for contributor data handling",
+    "test_cases": [
+        {
+            "case_name": "same_username_both_platforms",
+            "description": "User exists on both GitHub and GitLab with identical username",
+            "scenario": "User 'opencoder' has accounts on both platforms - should be stored as 2 separate records",
+            "github_record": {
+                "cntrb_id": "aaaaaaaa-1111-2222-3333-444444444444",
+                "cntrb_login": "opencoder",
+                "gh_user_id": 9876543,
+                "gh_login": "opencoder",
+                "gh_url": "https://api.github.com/users/opencoder",
+                "gh_html_url": "https://github.com/opencoder",
+                "gh_avatar_url": "https://avatars.githubusercontent.com/u/9876543?v=4",
+                "gh_node_id": "MDQ6VXNlcjk4NzY1NDM=",
+                "gh_type": "User",
+                "gh_site_admin": false,
+                "gl_id": null,
+                "gl_username": null,
+                "gl_web_url": null,
+                "gl_avatar_url": null,
+                "gl_state": null,
+                "gl_full_name": null,
+                "tool_source": "GitHub API",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "gitlab_record": {
+                "cntrb_id": "bbbbbbbb-2222-3333-4444-555555555555",
+                "cntrb_login": "opencoder",
+                "gh_user_id": null,
+                "gh_login": null,
+                "gh_url": null,
+                "gh_avatar_url": null,
+                "gl_id": 7654321,
+                "gl_username": "opencoder",
+                "gl_web_url": "https://gitlab.com/opencoder",
+                "gl_avatar_url": "https://secure.gravatar.com/avatar/xyz123?s=80",
+                "gl_state": "active",
+                "gl_full_name": "Open Coder",
+                "tool_source": "GitLab API",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "validation": [
+                "✅ Two separate cntrb_id values",
+                "✅ Same cntrb_login for both (universal identifier)",
+                "✅ GitHub record has gh_* populated, gl_* NULL",
+                "✅ GitLab record has gl_* populated, gh_* NULL",
+                "✅ No constraint violations",
+                "✅ Queries can distinguish by checking gh_user_id vs gl_id"
+            ],
+            "notes": [
+                "This is a valid scenario - users can have same username on different platforms",
+                "cntrb_login is not unique across platforms, only within a platform",
+                "GL-cntrb-LOGIN-UNIQUE constraint would prevent duplicates within same platform"
+            ]
+        },
+        {
+            "case_name": "special_characters_username",
+            "description": "Username contains special characters allowed by platform",
+            "api_response": {
+                "platform": "GitHub",
+                "login": "user-name_123",
+                "id": 5555555,
+                "url": "https://api.github.com/users/user-name_123",
+                "html_url": "https://github.com/user-name_123",
+                "avatar_url": "https://avatars.githubusercontent.com/u/5555555?v=4",
+                "type": "User"
+            },
+            "db_record": {
+                "cntrb_id": "cccccccc-3333-4444-5555-666666666666",
+                "cntrb_login": "user-name_123",
+                "gh_user_id": 5555555,
+                "gh_login": "user-name_123",
+                "gh_url": "https://api.github.com/users/user-name_123",
+                "gh_html_url": "https://github.com/user-name_123",
+                "gh_avatar_url": "https://avatars.githubusercontent.com/u/5555555?v=4",
+                "gh_type": "User",
+                "gl_id": null,
+                "gl_username": null
+            },
+            "validation": [
+                "✅ Hyphens and underscores preserved",
+                "✅ Numbers allowed",
+                "✅ No encoding issues in database",
+                "✅ URL encoding handled correctly"
+            ],
+            "notes": [
+                "GitHub allows: alphanumeric, hyphens, underscores",
+                "GitLab allows: alphanumeric, hyphens, underscores, periods, plus signs",
+                "Special characters should not break storage or queries"
+            ]
+        },
+        {
+            "case_name": "null_optional_fields",
+            "description": "User with minimal profile - many optional fields are NULL",
+            "api_response": {
+                "platform": "GitLab",
+                "id": 1111111,
+                "username": "minimal_user",
+                "name": null,
+                "state": "active",
+                "avatar_url": null,
+                "web_url": "https://gitlab.com/minimal_user",
+                "bio": null,
+                "location": null,
+                "public_email": null,
+                "skype": "",
+                "linkedin": "",
+                "twitter": "",
+                "website_url": "",
+                "organization": null
+            },
+            "db_record": {
+                "cntrb_id": "dddddddd-4444-5555-6666-777777777777",
+                "cntrb_login": "minimal_user",
+                "cntrb_email": null,
+                "cntrb_company": null,
+                "cntrb_location": null,
+                "cntrb_full_name": null,
+                "gh_user_id": null,
+                "gh_login": null,
+                "gh_url": null,
+                "gh_avatar_url": null,
+                "gl_id": 1111111,
+                "gl_username": "minimal_user",
+                "gl_web_url": "https://gitlab.com/minimal_user",
+                "gl_avatar_url": null,
+                "gl_state": "active",
+                "gl_full_name": null,
+                "tool_source": "GitLab API",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "validation": [
+                "✅ NULL values stored correctly (not empty strings)",
+                "✅ Required fields (id, username, web_url, state) present",
+                "✅ Optional fields safely NULL",
+                "✅ No constraint violations",
+                "✅ Queries handle NULL safely with .get() method"
+            ],
+            "notes": [
+                "Use .get(key, default) for safe optional field access",
+                "NULL is correct for missing data, not empty string",
+                "Database constraints only on required fields"
+            ]
+        },
+        {
+            "case_name": "bot_account",
+            "description": "Bot account has different data structure",
+            "api_response": {
+                "platform": "GitHub",
+                "login": "dependabot[bot]",
+                "id": 49699333,
+                "node_id": "MDM6Qm90NDk2OTkzMzM=",
+                "avatar_url": "https://avatars.githubusercontent.com/in/29110?v=4",
+                "url": "https://api.github.com/users/dependabot%5Bbot%5D",
+                "html_url": "https://github.com/apps/dependabot",
+                "type": "Bot",
+                "site_admin": false
+            },
+            "db_record": {
+                "cntrb_id": "eeeeeeee-5555-6666-7777-888888888888",
+                "cntrb_login": "dependabot[bot]",
+                "cntrb_type": "Bot",
+                "gh_user_id": 49699333,
+                "gh_login": "dependabot[bot]",
+                "gh_url": "https://api.github.com/users/dependabot%5Bbot%5D",
+                "gh_html_url": "https://github.com/apps/dependabot",
+                "gh_avatar_url": "https://avatars.githubusercontent.com/in/29110?v=4",
+                "gh_node_id": "MDM6Qm90NDk2OTkzMzM=",
+                "gh_type": "Bot",
+                "gh_site_admin": false,
+                "gl_id": null,
+                "gl_username": null
+            },
+            "validation": [
+                "✅ Bracket notation [bot] preserved in username",
+                "✅ Type field set to 'Bot'",
+                "✅ URL encoding handled (%5B for [)",
+                "✅ No email or full name (bots don't have these)",
+                "✅ Unique ID still enforces uniqueness"
+            ],
+            "notes": [
+                "GitHub bots have [bot] suffix in username",
+                "GitLab bots have 'bot' field set to true",
+                "Bots should be stored same as regular users with type='Bot'"
+            ]
+        },
+        {
+            "case_name": "deleted_or_blocked_user",
+            "description": "User account that was deleted or blocked",
+            "api_response": {
+                "platform": "GitLab",
+                "id": 9999999,
+                "username": "deleted_user_9999999",
+                "name": "Ghost User",
+                "state": "blocked",
+                "avatar_url": null,
+                "web_url": "https://gitlab.com/deleted_user_9999999",
+                "note": "This is GitLab's placeholder for deleted users"
+            },
+            "db_record": {
+                "cntrb_id": "ffffffff-6666-7777-8888-999999999999",
+                "cntrb_login": "deleted_user_9999999",
+                "cntrb_full_name": "Ghost User",
+                "gh_user_id": null,
+                "gh_login": null,
+                "gl_id": 9999999,
+                "gl_username": "deleted_user_9999999",
+                "gl_web_url": "https://gitlab.com/deleted_user_9999999",
+                "gl_avatar_url": null,
+                "gl_state": "blocked",
+                "gl_full_name": "Ghost User",
+                "tool_source": "GitLab API",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "validation": [
+                "✅ State field captures 'blocked' status",
+                "✅ Ghost user pattern recognized",
+                "✅ Historical data preserved",
+                "✅ Can query for blocked/deleted users"
+            ],
+            "notes": [
+                "GitHub deletes user data, returns 404",
+                "GitLab preserves as 'Ghost User' with state='blocked'",
+                "State can be: active, blocked, banned, ldap_blocked",
+                "Keep historical records for contribution tracking"
+            ]
+        },
+        {
+            "case_name": "username_changed",
+            "description": "User changed their username - how to handle historical data",
+            "scenario": "User 'oldname' changed to 'newname' - API returns new username",
+            "api_response": {
+                "platform": "GitHub",
+                "login": "newname",
+                "id": 3333333,
+                "url": "https://api.github.com/users/newname",
+                "html_url": "https://github.com/newname"
+            },
+            "db_records": {
+                "old_record": {
+                    "cntrb_id": "00000000-7777-8888-9999-aaaaaaaaaaaa",
+                    "cntrb_login": "oldname",
+                    "gh_user_id": 3333333,
+                    "gh_login": "oldname",
+                    "gh_url": "https://api.github.com/users/oldname",
+                    "data_collection_date": "2025-01-15T08:00:00.000000"
+                },
+                "new_record": {
+                    "cntrb_id": "00000000-7777-8888-9999-aaaaaaaaaaaa",
+                    "cntrb_login": "newname",
+                    "gh_user_id": 3333333,
+                    "gh_login": "newname",
+                    "gh_url": "https://api.github.com/users/newname",
+                    "data_collection_date": "2025-12-28T08:00:00.000000"
+                }
+            },
+            "validation": [
+                "✅ Same cntrb_id preserved (keyed by gh_user_id/gl_id, not username)",
+                "✅ Username updated to current value",
+                "✅ Historical contributions still linked via cntrb_id",
+                "✅ No duplicate records created"
+            ],
+            "notes": [
+                "cntrb_id is keyed by platform ID (gh_user_id/gl_id), not username",
+                "Username changes don't break contribution history",
+                "GL-cntrb-LOGIN-UNIQUE constraint may need updating if username already taken"
+            ]
+        },
+        {
+            "case_name": "missing_created_at_date",
+            "description": "API response missing created_at field",
+            "api_response": {
+                "platform": "GitLab",
+                "id": 2222222,
+                "username": "nodate",
+                "web_url": "https://gitlab.com/nodate",
+                "state": "active"
+            },
+            "db_record": {
+                "cntrb_id": "11111111-8888-9999-aaaa-bbbbbbbbbbbb",
+                "cntrb_login": "nodate",
+                "cntrb_created_at": null,
+                "gl_id": 2222222,
+                "gl_username": "nodate",
+                "gl_web_url": "https://gitlab.com/nodate",
+                "gl_state": "active",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "validation": [
+                "✅ NULL stored for missing created_at",
+                "✅ .get('created_at') returns None safely",
+                "✅ No crashes from missing optional date field",
+                "✅ data_collection_date still captured"
+            ],
+            "notes": [
+                "Always use .get() method for optional fields",
+                "created_at may be missing for very old accounts",
+                "data_collection_date is our fallback timestamp"
+            ]
+        },
+        {
+            "case_name": "self_hosted_gitlab_instance",
+            "description": "GitLab user from self-hosted instance (not gitlab.com)",
+            "api_response": {
+                "platform": "GitLab",
+                "id": 42,
+                "username": "enterprise_user",
+                "web_url": "https://gitlab.example.com/enterprise_user",
+                "state": "active",
+                "avatar_url": "https://gitlab.example.com/uploads/-/system/user/avatar/42/avatar.png"
+            },
+            "db_record": {
+                "cntrb_id": "22222222-9999-aaaa-bbbb-cccccccccccc",
+                "cntrb_login": "enterprise_user",
+                "gh_user_id": null,
+                "gh_login": null,
+                "gl_id": 42,
+                "gl_username": "enterprise_user",
+                "gl_web_url": "https://gitlab.example.com/enterprise_user",
+                "gl_avatar_url": "https://gitlab.example.com/uploads/-/system/user/avatar/42/avatar.png",
+                "gl_state": "active",
+                "tool_source": "GitLab API",
+                "data_source": "https://gitlab.example.com",
+                "data_collection_date": "2025-12-28T08:00:00.000000"
+            },
+            "validation": [
+                "✅ Custom domain in web_url",
+                "✅ Custom domain in avatar_url",
+                "✅ data_source captures instance URL",
+                "✅ Same column structure regardless of instance",
+                "✅ No hard-coded gitlab.com assumptions"
+            ],
+            "notes": [
+                "Self-hosted GitLab instances have custom domains",
+                "User IDs only unique within an instance",
+                "Use data_source to distinguish instances",
+                "Don't assume gitlab.com URLs"
+            ]
+        }
+    ],
+    "summary": {
+        "total_cases": 9,
+        "categories": {
+            "platform_separation": [
+                "same_username_both_platforms"
+            ],
+            "data_validation": [
+                "null_optional_fields",
+                "missing_created_at_date"
+            ],
+            "special_accounts": [
+                "bot_account",
+                "deleted_or_blocked_user"
+            ],
+            "username_handling": [
+                "special_characters_username",
+                "username_changed"
+            ],
+            "deployment_scenarios": [
+                "self_hosted_gitlab_instance"
+            ]
+        },
+        "testing_priority": [
+            "HIGH: same_username_both_platforms - Core PR functionality",
+            "HIGH: null_optional_fields - Prevents crashes",
+            "MEDIUM: bot_account - Common in real data",
+            "MEDIUM: special_characters_username - Edge case validation",
+            "LOW: deleted_or_blocked_user - Historical tracking",
+            "LOW: username_changed - UUID-based resolution",
+            "LOW: missing_created_at_date - Defensive coding",
+            "LOW: self_hosted_gitlab_instance - Enterprise feature"
+        ]
+    }
+}
